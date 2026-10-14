@@ -1,5 +1,5 @@
 # A2Z-ai-studio
- 
++
 const CACHE = "a2z-voice-ai-studio-v1";
 const CORE = ["./", "./index.html", "./manifest.webmanifest"];
 self.addEventListener("install", event => {
