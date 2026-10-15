@@ -1,791 +1,231 @@
-
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#11131b">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="A2Z Voice Studio">
-<link rel="manifest" href="./manifest.webmanifest">
-<title>A2Z Voice AI Studio</title>
-<style>
-:root{color-scheme:dark;--bg:#0d0f16;--panel:#171a25;--panel2:#202434;--line:#30364a;--text:#f4f5fb;--muted:#a7aec2;--accent:#a78bfa;--accent2:#6ee7b7;--danger:#fb7185}
-*{box-sizing:border-box}
-body{margin:0;background:radial-gradient(1000px 500px at 50% -200px,#292044 0%,var(--bg) 65%);color:var(--text);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
-header{padding:22px 18px 14px;max-width:900px;margin:auto}
-.eyebrow{color:var(--accent2);font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:800}
-h1{font-size:28px;line-height:1.1;margin:7px 0}
-header p{margin:8px 0 0;color:var(--muted);font-size:14px}
-main{max-width:900px;margin:auto;padding:0 14px 40px}
-.tabs{display:flex;gap:8px;overflow:auto;padding:6px 2px 14px;position:sticky;top:0;background:rgba(13,15,22,.94);backdrop-filter:blur(12px);z-index:4}
-.tab{flex:1;min-width:max-content;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:12px;padding:11px 13px;font-weight:700}
-.tab.active{background:var(--accent);color:#171226;border-color:var(--accent)}
-.panel{background:rgba(23,26,37,.96);border:1px solid var(--line);border-radius:18px;padding:16px;margin:0 0 13px;box-shadow:0 10px 30px #0002}
-.panel h2{font-size:18px;margin:0 0 12px}
-.panel h3{font-size:15px;margin:14px 0 8px}
-label{display:block;font-size:13px;color:var(--muted);font-weight:700;margin:12px 0 6px}
-input,textarea,select{width:100%;font:inherit;color:var(--text);background:#0e111a;border:1px solid var(--line);border-radius:11px;padding:12px;outline:none}
-textarea{min-height:130px;resize:vertical}
-input:focus,textarea:focus,select:focus{border-color:var(--accent)}
-button,.filebtn{font:inherit;font-weight:750;border:0;border-radius:11px;padding:12px 14px;background:var(--accent);color:#171226;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px}
-button:disabled{opacity:.45;cursor:not-allowed}
-.secondary{background:var(--panel2);color:var(--text);border:1px solid var(--line)}
-.green{background:var(--accent2);color:#08251c}
-.red{background:#3b1d2b;color:#fecdd3;border:1px solid #713449}
-.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.actions button{flex:1}
-.hint,.muted{color:var(--muted);font-size:13px}
-.status{border-radius:10px;padding:10px 12px;background:#10141f;border:1px solid var(--line);font-size:13px;color:var(--muted);margin-top:10px;overflow-wrap:anywhere}
-.status.good{color:#a7f3d0;border-color:#286650}
-.status.warn{color:#fde68a;border-color:#70591c}
-.grid{display:grid;grid-template-columns:1fr;gap:12px}
-.item{border:1px solid var(--line);background:#11141e;border-radius:13px;padding:12px;margin-top:8px}
-.item strong{display:block;overflow-wrap:anywhere}
-.item small{color:var(--muted)}
-.item .actions{margin-top:8px}
-.item .actions button{font-size:13px;padding:9px}
-.pill{display:inline-block;font-size:11px;border:1px solid var(--line);color:var(--muted);padding:3px 7px;border-radius:99px;margin:3px 4px 0 0}
-audio{width:100%;margin-top:10px}
-.hidden{display:none!important}
-.section-title{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.section-title h2{margin:0}
-.foot{font-size:12px;color:var(--muted);text-align:center;padding:12px 10px 30px}
-.check{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--muted);margin-top:10px}
-.check input{width:auto;margin-top:4px}
-.record-indicator{display:inline-block;width:8px;height:8px;background:var(--danger);border-radius:50%;margin-right:6px}
-@media(min-width:700px){.grid{grid-template-columns:1fr 1fr}header{padding-top:30px}h1{font-size:34px}}
-</style>
-</head>
-<body>
-<header>
-  <div class="eyebrow">Your private creative workspace</div>
-  <h1>A2Z Voice AI Studio</h1>
-  <p>Capture your voice, build songs, keep your projects together.</p>
-</header>
-<main>
-  <nav class="tabs" aria-label="Studio sections">
-    <button class="tab active" data-tab="create">Create</button>
-    <button class="tab" data-tab="voice">My Voice</button>
-    <button class="tab" data-tab="projects">Projects</button>
-    <button class="tab" data-tab="connect">AI Connection</button>
-  </nav>
-
-  <section id="tab-create">
-    <div class="panel">
-      <div class="panel" id="creation-mode-panel">
-        <h2>What do you want to create?</h2>
-        <div class="actions">
-          <button type="button" id="createSongMode" class="green">Create a Song</button>
-          <button type="button" id="useMelodyMode" class="secondary">Use My Melody</button>
-        </div>
-        <h3>Workspace</h3>
-        <div class="actions">
-          <button type="button" id="simpleMode" class="green">Simple Mode</button>
-          <button type="button" id="studioMode" class="secondary">Studio Mode</button>
-        </div>
-        <p id="creationModeStatus" class="status">Simple Mode selected.</p>
-      </div>
-
-      <div class="section-title"><h2>Song workspace</h2><span class="pill">Saved on this device</span></div>
-      <label for="projectName">Project name</label>
-      <input id="projectName" maxlength="100" placeholder="e.g. The Clue Was Given">
-      <label for="lyrics">Lyrics</label>
-      <textarea id="lyrics" placeholder="Paste or write your lyrics here..."></textarea>
-      <label for="style">Sound and performance direction</label>
-      <textarea id="style" style="min-height:90px" placeholder="e.g. Dark cinematic alternative hip-hop, introspective male vocals, haunting piano, dynamic delivery..."></textarea>
-      <label for="voiceSelect">Voice sample to send to a connected model</label>
-      <select id="voiceSelect"><option value="">No voice sample selected</option></select>
-      <label for="melodyFile">Optional reference melody / vocal guide</label>
-      <input id="melodyFile" type="file" accept="audio/*">
-      <div id="melodyStatus" class="hint">No reference audio selected.</div>
-      <div class="actions">
-        <button id="saveProject" class="green">Save project</button>
-        <button id="newProject" class="secondary">New project</button>
-      </div>
-      <div id="projectStatus" class="status">Your drafts stay in this browser until you export them or clear browser data.</div>
-    </div>
-
-    <div class="panel">
-      <h2>Generate vocals with your voice model</h2>
-      <p class="hint">This button sends your lyrics, style, voice sample and optional guide audio to the model endpoint you configure in AI Connection. No model is built into this starter app.</p>
-      <label class="check"><input id="confirmRights" type="checkbox"> I own or have permission to use the voice recordings I upload, and understand that audio may be sent to the configured endpoint.</label>
-      <div class="actions"><button id="generate" class="green">Generate song vocals</button></div>
-      <div id="generateStatus" class="status">AI connection not tested yet.</div>
-      <div id="generatedPlayerWrap" class="hidden">
-        <h3>Latest generated result</h3>
-        <audio id="generatedPlayer" controls></audio>
-        <div class="actions"><button id="downloadGenerated">Download result</button><button id="saveGenerated" class="secondary">Save result to project</button></div>
-      </div>
-    </div>
-  </section>
-
-  <section id="tab-voice" class="hidden">
-    <div class="panel">
-      <h2>Record a voice sample</h2>
-      <p class="hint">Record in a quiet room, keep the same distance from the microphone, and avoid music playing in the background. A clean, dry vocal is easiest to work with.</p>
-      <label for="sampleName">Sample name</label>
-      <input id="sampleName" placeholder="e.g. Natural speaking voice">
-      <div class="actions">
-        <button id="startRecord">● Start recording</button>
-        <button id="stopRecord" class="secondary" disabled>Stop recording</button>
-      </div>
-      <div id="recordStatus" class="status">Microphone permission is requested only when you tap Start recording.</div>
-      <div id="recordPreviewWrap" class="hidden">
-        <audio id="recordPreview" controls></audio>
-        <div class="actions">
-          <button id="keepRecording" class="green">Save recording to voice library</button>
-          <button id="discardRecording" class="secondary">Discard take</button>
-        </div>
-      </div>
-    </div>
-    <div class="panel">
-      <h2>Upload an existing recording</h2>
-      <label for="voiceUpload">Choose audio from Files</label>
-      <input id="voiceUpload" type="file" accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg">
-      <label for="uploadName">Name this sample</label>
-      <input id="uploadName" placeholder="e.g. Singing reference take">
-      <div class="actions"><button id="importVoice">Add to voice library</button></div>
-      <div id="uploadStatus" class="status">Original audio is stored in this browser's local database.</div>
-    </div>
-    <div class="panel"><h2>Your voice library</h2><div id="voiceList" class="muted">No voice samples yet.</div></div>
-  </section>
-
-  <section id="tab-projects" class="hidden">
-    <div class="panel">
-      <div class="section-title"><h2>Saved projects</h2><button id="exportBackup" class="secondary">Export backup</button></div>
-      <p class="hint">Projects and audio are stored locally in this browser. Export a backup regularly; clearing Safari website data can erase local projects.</p>
-      <div id="projectList" class="muted">No saved projects yet.</div>
-      <label for="importBackup">Import a project backup JSON</label>
-      <input id="importBackup" type="file" accept="application/json,.json">
-      <div class="actions"><button id="importBackupButton" class="secondary">Import backup</button></div>
-      <div id="backupStatus" class="status">Backups contain project text and settings, not large audio files.</div>
-    </div>
-  </section>
-
-  <section id="tab-connect" class="hidden">
-    <div class="panel">
-      <h2>Connect an AI singing model</h2>
-      <p class="hint">This is the integration point for a compatible voice-cloning / singing service or your own server. A static iPhone app cannot safely keep a secret API key. Do not paste a private provider key here.</p>
-      <label for="endpoint">Your model server URL</label>
-      <input id="endpoint" type="url" placeholder="https://your-server.example/generate">
-      <label for="testToken">Optional demo label (not a secret)</label>
-      <input id="testToken" placeholder="e.g. my-voice-model-v1">
-      <label class="check"><input id="rememberEndpoint" type="checkbox" checked> Remember this endpoint on this device</label>
-      <div class="actions"><button id="saveEndpoint">Save connection settings</button><button id="testEndpoint" class="secondary">Test connection</button></div>
-      <div id="connectionStatus" class="status">No endpoint configured.</div>
-      <h3>Required server contract</h3>
-      <p class="hint">The app sends a POST request using multipart/form-data with these fields: <code>lyrics</code>, <code>style</code>, <code>voice_sample</code>, optional <code>reference_audio</code>, and <code>model_label</code>. The server should return generated audio as the response body (audio/wav, audio/mpeg, or another playable audio type), or JSON containing an <code>audio_url</code> that the browser can access.</p>
-      <p class="hint">The server must allow requests from your app's website (CORS), protect any provider credentials server-side, and implement actual singing generation. GitHub Pages only hosts the interface; it does not run the AI model.</p>
-    </div>
-    <div class="panel">
-      <h2>WAV export</h2>
-      <p class="hint">Recorded samples and imported audio can be converted to a mono 16-bit PCM WAV file in the browser when the browser can decode the source format. Large audio files may take a little time on iPhone.</p>
-      <label for="wavSource">Choose a voice sample to export as WAV</label>
-      <select id="wavSource"><option value="">Select a sample</option></select>
-      <div class="actions"><button id="exportWav">Convert and download WAV</button></div>
-      <div id="wavStatus" class="status">Choose a sample to begin.</div>
-    </div>
-  </section>
-  <div class="foot">A2Z Voice AI Studio · Starter build · Audio stays on this device unless you explicitly send it to a configured model endpoint.</div>
-</main>
-
-<script>
-(() => {
-'use strict';
-
-const DB_NAME='a2z-voice-ai-studio', DB_VERSION=1;
-let db, recorder=null, mediaStream=null, pendingRecording=null, referenceAudio=null, latestGenerated=null, currentProjectId=null;
-let creationWorkflow='song';
-let studioMode=false;
-
-const $ = id => document.getElementById(id);
-const now = () => new Date().toISOString();
-const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2));
-
-function status(id,msg,type=''){
-  const el=$(id);
-  el.textContent=msg;
-  el.className='status '+type;
-}
-
-function openDB(){
-  return new Promise((resolve,reject)=>{
-    const req=indexedDB.open(DB_NAME,DB_VERSION);
-    req.onupgradeneeded=()=>{
-      const d=req.result;
-      if(!d.objectStoreNames.contains('projects'))d.createObjectStore('projects',{keyPath:'id'});
-      if(!d.objectStoreNames.contains('voices'))d.createObjectStore('voices',{keyPath:'id'});
-    };
-    req.onsuccess=()=>resolve(req.result);
-    req.onerror=()=>reject(req.error);
-  });
-}
-
-function store(name,mode='readonly'){
-  return db.transaction(name,mode).objectStore(name);
-}
-
-function getAll(name){
-  return new Promise((resolve,reject)=>{
-    const r=store(name).getAll();
-    r.onsuccess=()=>resolve(r.result||[]);
-    r.onerror=()=>reject(r.error);
-  });
-}
-
-function put(name,item){
-  return new Promise((resolve,reject)=>{
-    const r=store(name,'readwrite').put(item);
-    r.onsuccess=()=>resolve(item);
-    r.onerror=()=>reject(r.error);
-  });
-}
-
-function remove(name,id){
-  return new Promise((resolve,reject)=>{
-    const r=store(name,'readwrite').delete(id);
-    r.onsuccess=()=>resolve();
-    r.onerror=()=>reject(r.error);
-  });
-}
-
-function get(name,id){
-  return new Promise((resolve,reject)=>{
-    const r=store(name).get(id);
-    r.onsuccess=()=>resolve(r.result);
-    r.onerror=()=>reject(r.error);
-  });
-}
-
-function escapeHTML(s=''){
-  return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-function fmtDate(s){
-  try{return new Date(s).toLocaleString();}catch{return '';}
-}
-
-function showTab(tab){
-  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
-  ['create','voice','projects','connect'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==tab));
-}
-
-document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>showTab(b.dataset.tab)));
-
-function projectFromForm(){
-  return {
-    id:currentProjectId||uid(),
-    name:$('projectName').value.trim()||'Untitled song',
-    lyrics:$('lyrics').value,
-    style:$('style').value,
-    voiceId:$('voiceSelect').value||'',
-    updatedAt:now()
-  };
-}
-
-async function refreshVoices(){
-  const voices=(await getAll('voices')).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
-  const current=$('voiceSelect').value;
-
-  ['voiceSelect','wavSource'].forEach(id=>{
-    const sel=$(id),prev=sel.value;
-    sel.innerHTML=id==='voiceSelect'
-      ?'<option value="">No voice sample selected</option>'
-      :'<option value="">Select a sample</option>';
-
-    voices.forEach(v=>{
-      const op=document.createElement('option');
-      op.value=v.id;
-      op.textContent=v.name+' ('+v.mime+')';
-      sel.appendChild(op);
-    });
-
-    sel.value=voices.some(v=>v.id===prev)
-      ?prev
-      :(id==='voiceSelect'&&voices.some(v=>v.id===current)?current:'');
-  });
-
-  $('voiceList').innerHTML=voices.length
-    ?voices.map(v=>`<div class="item"><strong>${escapeHTML(v.name)}</strong><small>${escapeHTML(v.mime)} · ${fmtDate(v.createdAt)}</small>${v.blob?`<audio controls preload="none" src="${URL.createObjectURL(v.blob)}"></audio>`:''}<div class="actions"><button class="secondary" data-download-voice="${v.id}">Download original</button><button data-wav-voice="${v.id}">Export WAV</button><button class="red" data-delete-voice="${v.id}">Delete</button></div></div>`).join('')
-    :'No voice samples yet. Record or upload one above.';
-
-  $('voiceList').querySelectorAll('[data-download-voice]').forEach(b=>b.onclick=async()=>{
-    const v=await get('voices',b.dataset.downloadVoice);
-    if(v)downloadBlob(v.blob,safeFile(v.name)+extensionFor(v.mime));
-  });
-
-  $('voiceList').querySelectorAll('[data-wav-voice]').forEach(b=>b.onclick=()=>exportVoiceAsWav(b.dataset.wavVoice));
-
-  $('voiceList').querySelectorAll('[data-delete-voice]').forEach(b=>b.onclick=async()=>{
-    if(confirm('Delete this voice sample from this device?')){
-      await remove('voices',b.dataset.deleteVoice);
-      await refreshVoices();
-      status('uploadStatus','Voice sample deleted.','good');
-    }
-  });
-}
-
-async function refreshProjects(){
-  const ps=(await getAll('projects')).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-
-  $('projectList').innerHTML=ps.length
-    ?ps.map(p=>`<div class="item"><strong>${escapeHTML(p.name)}</strong><small>Updated ${fmtDate(p.updatedAt)}</small><div>${p.voiceId?'<span class="pill">Voice sample selected</span>':''}</div><div class="actions"><button data-open-project="${p.id}">Open</button><button class="secondary" data-copy-project="${p.id}">Duplicate</button><button class="red" data-delete-project="${p.id}">Delete</button></div></div>`).join('')
-    :'No saved projects yet.';
-
-  $('projectList').querySelectorAll('[data-open-project]').forEach(b=>b.onclick=async()=>{
-    const p=await get('projects',b.dataset.openProject);
-    if(!p)return;
-    currentProjectId=p.id;
-    $('projectName').value=p.name;
-    $('lyrics').value=p.lyrics||'';
-    $('style').value=p.style||'';
-    $('voiceSelect').value=p.voiceId||'';
-    status('projectStatus','Opened '+p.name+'.','good');
-    showTab('create');
-    window.scrollTo({top:0,behavior:'smooth'});
-  });
-
-  $('projectList').querySelectorAll('[data-copy-project]').forEach(b=>b.onclick=async()=>{
-    const p=await get('projects',b.dataset.copyProject);
-    if(p){
-      p.id=uid();
-      p.name=p.name+' (copy)';
-      p.updatedAt=now();
-      await put('projects',p);
-      await refreshProjects();
-    }
-  });
-
-  $('projectList').querySelectorAll('[data-delete-project]').forEach(b=>b.onclick=async()=>{
-    if(confirm('Delete this project?')){
-      await remove('projects',b.dataset.deleteProject);
-      if(currentProjectId===b.dataset.deleteProject)currentProjectId=null;
-      await refreshProjects();
-    }
-  });
-}
-
-$('saveProject').onclick=async()=>{
-  const p=projectFromForm();
-  await put('projects',p);
-  currentProjectId=p.id;
-  status('projectStatus','Saved "'+p.name+'".','good');
-  await refreshProjects();
-};
-
-$('newProject').onclick=()=>{
-  currentProjectId=null;
-  $('projectName').value='';
-  $('lyrics').value='';
-  $('style').value='';
-  $('voiceSelect').value='';
-  referenceAudio=null;
-  $('melodyFile').value='';
-  $('melodyStatus').textContent='No reference audio selected.';
-  status('projectStatus','New blank project. Save it when ready.');
-};
-
-$('melodyFile').addEventListener('change',()=>{
-  referenceAudio=$('melodyFile').files[0]||null;
-  $('melodyStatus').textContent=referenceAudio
-    ?'Selected: '+referenceAudio.name+' ('+Math.round(referenceAudio.size/1024)+' KB)'
-    :'No reference audio selected.';
-});
-
-/* Creation-mode logic belongs inside this script, not inside the HTML. */
-function updateCreationMode(){
-  const song=creationWorkflow==='song';
-
-  $('createSongMode').className=song?'green':'secondary';
-  $('useMelodyMode').className=song?'secondary':'green';
-  $('simpleMode').className=studioMode?'secondary':'green';
-  $('studioMode').className=studioMode?'green':'secondary';
-
-  document.querySelector('label[for="style"]').classList.toggle('hidden',!studioMode);
-  $('style').classList.toggle('hidden',!studioMode);
-
-  $('melodyFile').required=!song;
-  document.querySelector('label[for="melodyFile"]').textContent=
-    song?'Optional reference melody / vocal guide':'Required melody / vocal guide';
-
-  $('creationModeStatus').textContent=!song
-    ?'Use My Melody selected. Choose your melody or vocal guide below.'
-    :studioMode
-      ?'Studio Mode selected. Edit your sound and performance direction.'
-      :'Simple Mode selected. Add your lyrics and choose your voice below.';
-}
-
-$('createSongMode').onclick=()=>{
-  creationWorkflow='song';
-  updateCreationMode();
-};
-
-$('useMelodyMode').onclick=()=>{
-  creationWorkflow='melody';
-  updateCreationMode();
-};
-
-$('simpleMode').onclick=()=>{
-  studioMode=false;
-  updateCreationMode();
-};
-
-$('studioMode').onclick=()=>{
-  studioMode=true;
-  updateCreationMode();
-};
-
-updateCreationMode();
-
-$('startRecord').onclick=async()=>{
-  try{
-    if(!navigator.mediaDevices?.getUserMedia||!window.MediaRecorder)
-      throw new Error('This browser does not support microphone recording here. Open the hosted app in Safari over HTTPS.');
-
-    mediaStream=await navigator.mediaDevices.getUserMedia({
-      audio:{
-        echoCancellation:false,
-        noiseSuppression:false,
-        autoGainControl:false
-      }
-    });
-
-    const types=['audio/mp4','audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus'];
-    const mime=types.find(t=>MediaRecorder.isTypeSupported(t));
-    recorder=mime?new MediaRecorder(mediaStream,{mimeType:mime}):new MediaRecorder(mediaStream);
-    const chunks=[];
-
-    recorder.ondataavailable=e=>{
-      if(e.data.size)chunks.push(e.data);
-    };
-
-    recorder.onstop=()=>{
-      pendingRecording=new Blob(chunks,{type:recorder.mimeType||'audio/mp4'});
-      $('recordPreview').src=URL.createObjectURL(pendingRecording);
-      $('recordPreviewWrap').classList.remove('hidden');
-      $('startRecord').disabled=false;
-      $('stopRecord').disabled=true;
-      mediaStream?.getTracks().forEach(t=>t.stop());
-      mediaStream=null;
-      status('recordStatus','Recording ready. Listen back, then save it to your library.','good');
-    };
-
-    recorder.start();
-    $('startRecord').disabled=true;
-    $('stopRecord').disabled=false;
-    status('recordStatus','Recording in progress… speak clearly and keep a steady distance.');
-  }catch(e){
-    mediaStream?.getTracks().forEach(t=>t.stop());
-    mediaStream=null;
-    $('startRecord').disabled=false;
-    $('stopRecord').disabled=true;
-    status('recordStatus',e.message||'Could not start recording. Check microphone permission.','warn');
-  }
-};
-
-$('stopRecord').onclick=()=>{
-  if(recorder&&recorder.state!=='inactive')recorder.stop();
-};
-
-$('keepRecording').onclick=async()=>{
-  if(!pendingRecording)return;
-  await put('voices',{
-    id:uid(),
-    name:$('sampleName').value.trim()||'Voice recording '+new Date().toLocaleDateString(),
-    mime:pendingRecording.type||'audio/unknown',
-    blob:pendingRecording,
-    createdAt:now()
-  });
-  pendingRecording=null;
-  $('recordPreviewWrap').classList.add('hidden');
-  $('sampleName').value='';
-  await refreshVoices();
-  status('recordStatus','Recording saved to your voice library on this device.','good');
-};
-
-$('discardRecording').onclick=()=>{
-  pendingRecording=null;
-  $('recordPreviewWrap').classList.add('hidden');
-  $('recordPreview').removeAttribute('src');
-  status('recordStatus','Take discarded.');
-};
-
-$('importVoice').onclick=async()=>{
-  const f=$('voiceUpload').files[0];
-  if(!f){
-    status('uploadStatus','Choose an audio file first.','warn');
-    return;
-  }
-  await put('voices',{
-    id:uid(),
-    name:$('uploadName').value.trim()||f.name.replace(/\.[^.]+$/,''),
-    mime:f.type||'audio/unknown',
-    blob:f,
-    createdAt:now()
-  });
-  $('voiceUpload').value='';
-  $('uploadName').value='';
-  await refreshVoices();
-  status('uploadStatus','Audio added to your local voice library.','good');
-};
-
-function safeFile(s){
-  return (s||'audio').trim().replace(/[^a-z0-9_-]+/gi,'_').replace(/^_+|_+$/g,'')||'audio';
-}
-
-function extensionFor(mime){
-  if((mime||'').includes('wav'))return '.wav';
-  if((mime||'').includes('mpeg')||(mime||'').includes('mp3'))return '.mp3';
-  if((mime||'').includes('mp4')||(mime||'').includes('aac'))return '.m4a';
-  if((mime||'').includes('ogg'))return '.ogg';
-  return '.audio';
-}
-
-function downloadBlob(blob,name){
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download=name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),60000);
-}
-
-function encodeWav(samples,sampleRate){
-  const buffer=new ArrayBuffer(44+samples.length*2);
-  const v=new DataView(buffer);
-  const str=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
-  str(0,'RIFF');
-  v.setUint32(4,36+samples.length*2,true);
-  str(8,'WAVE');
-  str(12,'fmt ');
-  v.setUint32(16,16,true);
-  v.setUint16(20,1,true);
-  v.setUint16(22,1,true);
-  v.setUint32(24,sampleRate,true);
-  v.setUint32(28,sampleRate*2,true);
-  v.setUint16(32,2,true);
-  v.setUint16(34,16,true);
-  str(36,'data');
-  v.setUint32(40,samples.length*2,true);
-  for(let i=0;i<samples.length;i++){
-    let s=Math.max(-1,Math.min(1,samples[i]));
-    v.setInt16(44+i*2,s<0?s*32768:s*32767,true);
-  }
-  return new Blob([buffer],{type:'audio/wav'});
-}
-
-async function convertBlobToWav(blob){
-  const AC=window.AudioContext||window.webkitAudioContext;
-  if(!AC)throw new Error('Audio decoding is not supported in this browser.');
-  const ctx=new AC();
-  try{
-    const ab=await blob.arrayBuffer();
-    const audio=await ctx.decodeAudioData(ab);
-    const n=audio.length,channels=audio.numberOfChannels,samples=new Float32Array(n);
-    for(let c=0;c<channels;c++){
-      const data=audio.getChannelData(c);
-      for(let i=0;i<n;i++)samples[i]+=data[i]/channels;
-    }
-    return encodeWav(samples,audio.sampleRate);
-  }finally{
-    await ctx.close();
-  }
-}
-
-async function exportVoiceAsWav(id){
-  status('wavStatus','Converting audio to WAV…');
-  try{
-    const v=await get('voices',id);
-    if(!v)throw new Error('Sample not found.');
-    const wav=await convertBlobToWav(v.blob);
-    downloadBlob(wav,safeFile(v.name)+'.wav');
-    status('wavStatus','WAV export ready. Check Files or Downloads.','good');
-  }catch(e){
-    status('wavStatus','Could not convert this file: '+e.message,'warn');
-  }
-}
-
-$('exportWav').onclick=()=>{
-  if(!$('wavSource').value){
-    status('wavStatus','Select a voice sample first.','warn');
-    return;
-  }
-  exportVoiceAsWav($('wavSource').value);
-};
-
-$('voiceSelect').addEventListener('change',()=>{});
-
-$('saveEndpoint').onclick=()=>{
-  const cfg={url:$('endpoint').value.trim(),label:$('testToken').value.trim()};
-  if($('rememberEndpoint').checked){
-    localStorage.setItem('mvstudio_endpoint',JSON.stringify(cfg));
-    sessionStorage.removeItem('mvstudio_endpoint');
-    status('connectionStatus','Connection settings saved on this device.','good');
-  }else{
-    sessionStorage.setItem('mvstudio_endpoint',JSON.stringify(cfg));
-    localStorage.removeItem('mvstudio_endpoint');
-    status('connectionStatus','Settings will last only for this browser session.','good');
-  }
-};
-
-function loadEndpoint(){
-  let cfg;
-  try{
-    cfg=JSON.parse(localStorage.getItem('mvstudio_endpoint')||sessionStorage.getItem('mvstudio_endpoint')||'{}');
-  }catch{}
-  if(cfg){
-    $('endpoint').value=cfg.url||'';
-    $('testToken').value=cfg.label||'';
-    if(cfg.url)status('connectionStatus','Endpoint loaded. Use Test connection to check it.');
-  }
-}
-
-$('testEndpoint').onclick=async()=>{
-  const url=$('endpoint').value.trim();
-  if(!url){
-    status('connectionStatus','Enter your model server URL first.','warn');
-    return;
-  }
-  try{
-    status('connectionStatus','Testing endpoint…');
-    const r=await fetch(url,{method:'OPTIONS'});
-    status('connectionStatus','Server responded to OPTIONS with HTTP '+r.status+'. This does not prove generation works; try a test generation next.','good');
-  }catch(e){
-    status('connectionStatus','Could not reach endpoint. It may not allow browser CORS, or the URL/server may be unavailable. Details: '+e.message,'warn');
-  }
-};
-
-$('generate').onclick=async()=>{
-  if(!$('confirmRights').checked){
-    status('generateStatus','Please confirm you have permission to use the uploaded voice.','warn');
-    return;
-  }
-
-  const url=$('endpoint').value.trim();
-  if(!url){
-    status('generateStatus','First configure your singing-model server under AI Connection. The app cannot generate vocals without a real model endpoint.','warn');
-    showTab('connect');
-    return;
-  }
-
-  if(!$('lyrics').value.trim()){
-    status('generateStatus','Add your lyrics first.','warn');
-    return;
-  }
-
-  try{
-    const selected=$('voiceSelect').value;
-    const voice=selected?await get('voices',selected):null;
-    if(!voice){
-      status('generateStatus','Choose a voice sample first.','warn');
-      return;
+""A2Z Voice AI Studio backend adapter for the official SoulX-Singer Space.
+
+The public Space's actual flow is:
+1. Transcribe the reference voice audio to prompt metadata.
+2. Transcribe the target vocal/melody guide to target metadata.
+3. Call singing synthesis with prompt audio + both metadata files.
+
+Typed lyrics and free-form style prompts are not direct inputs to this model's
+synthesis function. The target guide determines the lyrics/melody that are sung.
+"""
+
+import os
+import tempfile
+from pathlib import Path
+from typing import Any
+
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
+from gradio_client import Client
+
+APP_TITLE = "A2Z Voice AI Studio"
+SOULX_SPACE = os.getenv("SOULX_SPACE", "Soul-AILab/SoulX-Singer").strip()
+
+app = FastAPI(title=APP_TITLE)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-A2Z-Model", "X-A2Z-Lyrics-Source"],
+)
+
+_client: Client | None = None
+_api_names: dict[str, str] = {}
+
+
+def get_client() -> Client:
+    """Create one Gradio client so the API calls share a client session."""
+    global _client
+    if _client is None:
+        _client = Client(SOULX_SPACE, verbose=False)
+    return _client
+
+
+def _endpoint(client: Client, key: str, candidates: tuple[str, ...]) -> str:
+    """Resolve endpoint names against the Space API schema, with safe fallbacks."""
+    if key in _api_names:
+        return _api_names[key]
+    try:
+        schema = client.view_api(print_info=False, return_format="dict") or {}
+        named = schema.get("named_endpoints", {}) if isinstance(schema, dict) else {}
+        # Gradio versions have used both slash-prefixed and bare names.
+        normalized = {str(name).lstrip("/"): str(name) for name in named}
+        for candidate in candidates:
+            if candidate.lstrip("/") in normalized:
+                _api_names[key] = normalized[candidate.lstrip("/")]
+                return _api_names[key]
+    except Exception:
+        # Let the actual request produce a useful error if schema discovery is unavailable.
+        pass
+    _api_names[key] = candidates[0]
+    return _api_names[key]
+
+
+def _first_output(result: Any, label: str) -> Any:
+    if isinstance(result, (tuple, list)):
+        if not result:
+            raise RuntimeError(f"SoulX-Singer returned no {label} outputs.")
+        return result[0]
+    return result
+
+
+def _file_path(value: Any, label: str) -> str:
+    """Extract a downloaded local filepath from Gradio's file output value."""
+    if isinstance(value, dict):
+        value = value.get("path") or value.get("name") or value.get("url")
+    elif isinstance(value, (tuple, list)):
+        value = value[0] if value else None
+    if not isinstance(value, str) or not value:
+        raise RuntimeError(f"SoulX-Singer did not return {label}.")
+    if value.startswith(("http://", "https://")):
+        return value
+    path = Path(value)
+    if not path.is_file():
+        raise RuntimeError(f"SoulX-Singer returned a missing {label} file.")
+    return str(path)
+
+
+def _call_soulx(prompt_path: str, target_path: str) -> Any:
+    """Run the same three-stage flow as the official Space's UI callbacks."""
+    client = get_client()
+
+    # The official UI runs these callbacks when audio is uploaded. Their output
+    # metadata is then passed into _run_synthesis. Names are discovered from the
+    # Space's own API schema rather than assuming a made-up synthesis endpoint.
+    prompt_result = client.predict(
+        prompt_path,
+        None,       # prompt metadata: generate it from the uploaded voice sample
+        "English", # prompt lyric language
+        "no",      # do not separate vocals from the reference voice by default
+        api_name=_endpoint(client, "transcribe_prompt", ("/_transcribe_prompt", "/transcribe_prompt")),
+    )
+    prompt_metadata = _file_path(_first_output(prompt_result, "reference-voice metadata"), "reference-voice metadata")
+
+    target_result = client.predict(
+        target_path,
+        None,       # target metadata: generate it from the guide audio
+        "English", # target lyric language
+        "yes",     # guide may contain accompaniment; enable vocal separation
+        api_name=_endpoint(client, "transcribe_target", ("/_transcribe_target", "/transcribe_target")),
+    )
+    target_metadata = _file_path(_first_output(target_result, "target metadata"), "target metadata")
+
+    # This is the actual synthesis callback and its actual input signature.
+    # The official UI uses melody-controlled or score-controlled.
+    result = client.predict(
+        prompt_path,
+        prompt_metadata,
+        target_metadata,
+        "melody-controlled",
+        "yes",   # automatic pitch shift
+        0,       # pitch shift in semitones
+        12306,   # reproducible default seed
+        api_name=_endpoint(client, "run_synthesis", ("/_run_synthesis", "/run_synthesis")),
+    )
+    return result
+
+
+@app.get("/")
+def home():
+    return {
+        "status": "running",
+        "app": APP_TITLE,
+        "singing_model": SOULX_SPACE,
+        "generation_route": "/generate",
+        "generation_flow": "reference transcription -> guide transcription -> synthesis",
     }
 
-    const fd=new FormData();
-    fd.append('lyrics',$('lyrics').value);
-    fd.append('style',$('style').value);
-    fd.append('voice_sample',voice.blob,safeFile(voice.name)+extensionFor(voice.mime));
-    fd.append('model_label',$('testToken').value.trim());
-    if(referenceAudio)fd.append('reference_audio',referenceAudio,referenceAudio.name);
 
-    status('generateStatus','Sending audio and lyrics to your configured model server. Generation time depends on that service…');
+@app.get("/health")
+def health():
+    return {"ok": True, "app": APP_TITLE, "model_configured": bool(SOULX_SPACE)}
 
-    const r=await fetch(url,{method:'POST',body:fd});
-    if(!r.ok)throw new Error('Server returned HTTP '+r.status+'.');
 
-    let blob;
-    if((r.headers.get('content-type')||'').includes('application/json')){
-      const j=await r.json();
-      if(!j.audio_url)throw new Error('JSON response must contain an audio_url field.');
-      const audioResponse=await fetch(j.audio_url);
-      if(!audioResponse.ok)throw new Error('Could not download audio_url result.');
-      blob=await audioResponse.blob();
-    }else{
-      blob=await r.blob();
-    }
+@app.post("/generate")
+async def generate(
+    lyrics: str = Form(""),
+    style: str = Form(""),
+    model_label: str = Form(""),
+    creation_mode: str = Form("song"),
+    studio_mode: str = Form("false"),
+    genre: str = Form(""),
+    vocal_delivery: str = Form(""),
+    mood: str = Form(""),
+    tempo: str = Form(""),
+    voice_sample: UploadFile = File(...),
+    reference_audio: UploadFile | None = File(None),
+):
+    # SoulX-Singer's synthesis model uses the guide audio's detected lyrics and
+    # melody. These form fields are accepted for frontend compatibility but are
+    # not direct controls in the official Space's synthesis callback.
+    if reference_audio is None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Select a target vocal/melody guide (up to 60 seconds). SoulX-Singer "
+                "needs both the reference voice sample and the target guide."
+            ),
+        )
 
-    if(!blob.size)throw new Error('Server returned an empty audio file.');
+    prompt_bytes = await voice_sample.read()
+    target_bytes = await reference_audio.read()
+    if not prompt_bytes:
+        raise HTTPException(status_code=400, detail="The reference voice sample is empty.")
+    if not target_bytes:
+        raise HTTPException(status_code=400, detail="The target vocal/melody guide is empty.")
 
-    latestGenerated=blob;
-    $('generatedPlayer').src=URL.createObjectURL(blob);
-    $('generatedPlayerWrap').classList.remove('hidden');
-    status('generateStatus','Generation returned audio successfully. Listen below.','good');
-  }catch(e){
-    status('generateStatus','Generation failed: '+e.message+'. Check the endpoint URL, CORS settings, and server contract.','warn');
-  }
-};
+    prompt_suffix = Path(voice_sample.filename or "voice.wav").suffix or ".wav"
+    target_suffix = Path(reference_audio.filename or "guide.wav").suffix or ".wav"
 
-$('downloadGenerated').onclick=()=>{
-  if(latestGenerated)downloadBlob(latestGenerated,safeFile($('projectName').value||'generated_vocals')+extensionFor(latestGenerated.type));
-};
+    try:
+        with tempfile.TemporaryDirectory(prefix="a2z-soulx-") as temp_dir:
+            prompt_path = str(Path(temp_dir) / f"prompt{prompt_suffix}")
+            target_path = str(Path(temp_dir) / f"target{target_suffix}")
+            Path(prompt_path).write_bytes(prompt_bytes)
+            Path(target_path).write_bytes(target_bytes)
 
-$('saveGenerated').onclick=async()=>{
-  if(!latestGenerated)return;
-  await put('voices',{
-    id:uid(),
-    name:(($('projectName').value||'Generated song')+' generated result'),
-    mime:latestGenerated.type||'audio/unknown',
-    blob:latestGenerated,
-    createdAt:now()
-  });
-  await refreshVoices();
-  status('generateStatus','Generated audio saved to your local library.','good');
-};
+            try:
+                result = await run_in_threadpool(_call_soulx, prompt_path, target_path)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        "SoulX-Singer generation failed during transcription or synthesis. "
+                        "The public Space may be queued, starting, or its API may have changed. "
+                        f"Details: {str(exc)[:700]}"
+                    ),
+                ) from exc
 
-$('exportBackup').onclick=async()=>{
-  const projects=await getAll('projects');
-  const backup={app:'A2Z Voice AI Studio',version:1,exportedAt:now(),projects};
-  downloadBlob(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),'a2z-voice-ai-studio-backup.json');
-  status('backupStatus','Project text backup exported. Audio samples are not included.','good');
-};
+            output_path = _file_path(_first_output(result, "generated-audio"), "generated-audio")
+            if output_path.startswith(("http://", "https://")):
+                import httpx
+                async with httpx.AsyncClient(timeout=120) as client:
+                    audio_response = await client.get(output_path)
+                if audio_response.is_error:
+                    raise HTTPException(status_code=502, detail="Could not download generated audio from SoulX-Singer.")
+                audio_bytes = audio_response.content
+                media_type = audio_response.headers.get("content-type", "audio/wav")
+            else:
+                audio_bytes = Path(output_path).read_bytes()
+                media_type = "audio/wav" if Path(output_path).suffix.lower() == ".wav" else "application/octet-stream"
 
-$('importBackupButton').onclick=async()=>{
-  const f=$('importBackup').files[0];
-  if(!f){
-    status('backupStatus','Choose a JSON backup file first.','warn');
-    return;
-  }
-  try{
-    const j=JSON.parse(await f.text());
-    if(!Array.isArray(j.projects))throw new Error('This file does not contain a projects array.');
-    for(const p of j.projects){
-      if(p.name){
-        await put('projects',{
-          id:p.id||uid(),
-          name:p.name,
-          lyrics:p.lyrics||'',
-          style:p.style||'',
-          voiceId:p.voiceId||'',
-          updatedAt:p.updatedAt||now()
-        });
-      }
-    }
-    await refreshProjects();
-    status('backupStatus','Project backup imported. Voice samples/audio are not part of JSON backups.','good');
-  }catch(e){
-    status('backupStatus','Import failed: '+e.message,'warn');
-  }
-};
+            if not audio_bytes:
+                raise HTTPException(status_code=502, detail="SoulX-Singer returned an empty audio file.")
 
-(async()=>{
-  try{
-    db=await openDB();
-    await refreshVoices();
-    await refreshProjects();
-    loadEndpoint();
-    if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
-      navigator.serviceWorker.register('./sw.js').catch(()=>{});
-    }
-  }catch(e){
-    status('projectStatus','Local database could not start: '+e.message,'warn');
-  }
-})();
-
-})();
-</script>
-</body>
-</html>
+            return Response(
+                content=audio_bytes,
+                media_type=media_type,
+                headers={
+                    "X-A2Z-Model": SOULX_SPACE,
+                    "X-A2Z-Lyrics-Source": "target-audio-guide",
+                    "Cache-Control": "no-store",
+                },
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Generation failed: {str(exc)[:700]}") from exc
