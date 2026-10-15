@@ -1,0 +1,13 @@
+
+services:
+  - type: web
+    name: a2z-voice-ai-server
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: MODEL_SERVER_URL
+        sync: false
+      - key: MODEL_SERVER_TOKEN
+        sync: false
