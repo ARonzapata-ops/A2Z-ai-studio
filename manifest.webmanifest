@@ -1,0 +1,11 @@
+{
+  "name": "A2Z Voice AI Studio",
+  "short_name": "A2Z Voice",
+  "description": "A personal voice recording and AI music project workspace.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0d0f16",
+  "theme_color": "#11131b",
+  "icons": []
+}
