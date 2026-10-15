@@ -1,104 +1,233 @@
+"""A2Z Voice AI Studio backend adapter for the official SoulX-Singer Space.
+
+The public Space's actual flow is:
+1. Transcribe the reference voice audio to prompt metadata.
+2. Transcribe the target vocal/melody guide to target metadata.
+3. Call singing synthesis with prompt audio + both metadata files.
+
+Typed lyrics and free-form style prompts are not direct inputs to this model's
+synthesis function. The target guide determines the lyrics/melody that are sung.
+"""
 
 import os
-import httpx
+import tempfile
+from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from starlette.concurrency import run_in_threadpool
+from gradio_client import Client
 
-app = FastAPI(title="A2Z Voice AI Studio")
+APP_TITLE = "A2Z Voice AI Studio"
+SOULX_SPACE = os.getenv("SOULX_SPACE", "Soul-AILab/SoulX-Singer").strip()
 
+app = FastAPI(title=APP_TITLE)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-A2Z-Model", "X-A2Z-Lyrics-Source"],
 )
+
+_client: Client | None = None
+_api_names: dict[str, str] = {}
+
+
+def get_client() -> Client:
+    """Create one Gradio client so the API calls share a client session."""
+    global _client
+    if _client is None:
+        _client = Client(SOULX_SPACE, verbose=False)
+    return _client
+
+
+def _endpoint(client: Client, key: str, candidates: tuple[str, ...]) -> str:
+    """Resolve endpoint names against the Space API schema, with safe fallbacks."""
+    if key in _api_names:
+        return _api_names[key]
+    try:
+        schema = client.view_api(print_info=False, return_format="dict") or {}
+        named = schema.get("named_endpoints", {}) if isinstance(schema, dict) else {}
+        # Gradio versions have used both slash-prefixed and bare names.
+        normalized = {str(name).lstrip("/"): str(name) for name in named}
+        for candidate in candidates:
+            if candidate.lstrip("/") in normalized:
+                _api_names[key] = normalized[candidate.lstrip("/")]
+                return _api_names[key]
+    except Exception:
+        # Let the actual request produce a useful error if schema discovery is unavailable.
+        pass
+    _api_names[key] = candidates[0]
+    return _api_names[key]
+
+
+def _first_output(result: Any, label: str) -> Any:
+    if isinstance(result, (tuple, list)):
+        if not result:
+            raise RuntimeError(f"SoulX-Singer returned no {label} outputs.")
+        return result[0]
+    return result
+
+
+def _file_path(value: Any, label: str) -> str:
+    """Extract a downloaded local filepath from Gradio's file output value."""
+    if isinstance(value, dict):
+        value = value.get("path") or value.get("name") or value.get("url")
+    elif isinstance(value, (tuple, list)):
+        value = value[0] if value else None
+    if not isinstance(value, str) or not value:
+        raise RuntimeError(f"SoulX-Singer did not return {label}.")
+    if value.startswith(("http://", "https://")):
+        return value
+    path = Path(value)
+    if not path.is_file():
+        raise RuntimeError(f"SoulX-Singer returned a missing {label} file.")
+    return str(path)
+
+
+def _call_soulx(prompt_path: str, target_path: str) -> Any:
+    """Run the same three-stage flow as the official Space's UI callbacks."""
+    client = get_client()
+
+    # The official UI runs these callbacks when audio is uploaded. Their output
+    # metadata is then passed into _run_synthesis. Names are discovered from the
+    # Space's own API schema rather than assuming a made-up synthesis endpoint.
+    prompt_result = client.predict(
+        prompt_path,
+        None,       # prompt metadata: generate it from the uploaded voice sample
+        "English", # prompt lyric language
+        "no",      # do not separate vocals from the reference voice by default
+        api_name=_endpoint(client, "transcribe_prompt", ("/_transcribe_prompt", "/transcribe_prompt")),
+    )
+    prompt_metadata = _file_path(_first_output(prompt_result, "reference-voice metadata"), "reference-voice metadata")
+
+    target_result = client.predict(
+        target_path,
+        None,       # target metadata: generate it from the guide audio
+        "English", # target lyric language
+        "yes",     # guide may contain accompaniment; enable vocal separation
+        api_name=_endpoint(client, "transcribe_target", ("/_transcribe_target", "/transcribe_target")),
+    )
+    target_metadata = _file_path(_first_output(target_result, "target metadata"), "target metadata")
+
+    # This is the actual synthesis callback and its actual input signature.
+    # The official UI uses melody-controlled or score-controlled.
+    result = client.predict(
+        prompt_path,
+        prompt_metadata,
+        target_metadata,
+        "melody-controlled",
+        "yes",   # automatic pitch shift
+        0,       # pitch shift in semitones
+        12306,   # reproducible default seed
+        api_name=_endpoint(client, "run_synthesis", ("/_run_synthesis", "/run_synthesis")),
+    )
+    return result
+
 
 @app.get("/")
 def home():
-    return {"status": "running", "app": "A2Z Voice AI Studio"}
+    return {
+        "status": "running",
+        "app": APP_TITLE,
+        "singing_model": SOULX_SPACE,
+        "generation_route": "/generate",
+        "generation_flow": "reference transcription -> guide transcription -> synthesis",
+    }
+
 
 @app.get("/health")
 def health():
-    return {"ok": True}
+    return {"ok": True, "app": APP_TITLE, "model_configured": bool(SOULX_SPACE)}
+
 
 @app.post("/generate")
 async def generate(
-    lyrics: str = Form(...),
+    lyrics: str = Form(""),
     style: str = Form(""),
     model_label: str = Form(""),
+    creation_mode: str = Form("song"),
+    studio_mode: str = Form("false"),
+    genre: str = Form(""),
+    vocal_delivery: str = Form(""),
+    mood: str = Form(""),
+    tempo: str = Form(""),
     voice_sample: UploadFile = File(...),
-    reference_audio: UploadFile = File(None),
+    reference_audio: UploadFile | None = File(None),
 ):
-    model_url = os.getenv("MODEL_SERVER_URL", "").strip()
-
-    if not model_url:
+    # SoulX-Singer's synthesis model uses the guide audio's detected lyrics and
+    # melody. These form fields are accepted for frontend compatibility but are
+    # not direct controls in the official Space's synthesis callback.
+    if reference_audio is None:
         raise HTTPException(
-            status_code=503,
-            detail="MODEL_SERVER_URL has not been configured."
+            status_code=400,
+            detail=(
+                "Select a target vocal/melody guide (up to 60 seconds). SoulX-Singer "
+                "needs both the reference voice sample and the target guide."
+            ),
         )
 
-    fields = {
-        "lyrics": lyrics,
-        "style": style,
-        "model_label": model_label,
-    }
+    prompt_bytes = await voice_sample.read()
+    target_bytes = await reference_audio.read()
+    if not prompt_bytes:
+        raise HTTPException(status_code=400, detail="The reference voice sample is empty.")
+    if not target_bytes:
+        raise HTTPException(status_code=400, detail="The target vocal/melody guide is empty.")
 
-    files = []
-
-    for name, upload in [
-        ("voice_sample", voice_sample),
-        ("reference_audio", reference_audio),
-    ]:
-        if upload:
-            data = await upload.read()
-            if data:
-                files.append((
-                    name,
-                    (
-                        upload.filename or "audio.wav",
-                        data,
-                        upload.content_type or "audio/wav",
-                    ),
-                ))
-
-    headers = {}
-    token = os.getenv("MODEL_SERVER_TOKEN", "").strip()
-
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+    prompt_suffix = Path(voice_sample.filename or "voice.wav").suffix or ".wav"
+    target_suffix = Path(reference_audio.filename or "guide.wav").suffix or ".wav"
 
     try:
-        async with httpx.AsyncClient(timeout=300) as client:
-            result = await client.post(
-                model_url,
-                data=fields,
-                files=files,
-                headers=headers,
+        with tempfile.TemporaryDirectory(prefix="a2z-soulx-") as temp_dir:
+            prompt_path = str(Path(temp_dir) / f"prompt{prompt_suffix}")
+            target_path = str(Path(temp_dir) / f"target{target_suffix}")
+            Path(prompt_path).write_bytes(prompt_bytes)
+            Path(target_path).write_bytes(target_bytes)
+
+            try:
+                result = await run_in_threadpool(_call_soulx, prompt_path, target_path)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=(
+                        "SoulX-Singer generation failed during transcription or synthesis. "
+                        "The public Space may be queued, starting, or its API may have changed. "
+                        f"Details: {str(exc)[:700]}"
+                    ),
+                ) from exc
+
+            output_path = _file_path(_first_output(result, "generated-audio"), "generated-audio")
+            if output_path.startswith(("http://", "https://")):
+                import httpx
+                async with httpx.AsyncClient(timeout=120) as client:
+                    audio_response = await client.get(output_path)
+                if audio_response.is_error:
+                    raise HTTPException(status_code=502, detail="Could not download generated audio from SoulX-Singer.")
+                audio_bytes = audio_response.content
+                media_type = audio_response.headers.get("content-type", "audio/wav")
+            else:
+                audio_bytes = Path(output_path).read_bytes()
+                media_type = "audio/wav" if Path(output_path).suffix.lower() == ".wav" else "application/octet-stream"
+
+            if not audio_bytes:
+                raise HTTPException(status_code=502, detail="SoulX-Singer returned an empty audio file.")
+
+            return Response(
+                content=audio_bytes,
+                media_type=media_type,
+                headers={
+                    "X-A2Z-Model": SOULX_SPACE,
+                    "X-A2Z-Lyrics-Source": "target-audio-guide",
+                    "Cache-Control": "no-store",
+                },
             )
-    except httpx.HTTPError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Could not reach singing model: {exc}",
-        )
-
-    if result.is_error:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Singing model error: {result.text[:1000]}",
-        )
-
-    content_type = result.headers.get(
-        "content-type", "application/octet-stream"
-    )
-
-    return Response(
-        content=result.content,
-        status_code=result.status_code,
-        media_type=content_type,
-    )
-
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Generation failed: {str(exc)[:700]}") from exc
 
 
