@@ -100,3 +100,8 @@ async def generate(
         media_type=content_type,
     )
 
+fastapi
+uvicorn[standard]
+httpx
+python-multipart
+
