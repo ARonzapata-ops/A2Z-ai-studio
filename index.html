@@ -93,10 +93,7 @@ main{max-width:900px;margin:auto;padding:0 14px 40px}.tabs{display:flex;gap:8px;
       <label for="sampleName">Sample name</label><input id="sampleName" placeholder="e.g. Natural speaking voice">
       <div class="actions">
         <button id="startRecord">● Start recording</button>
-        
-let studioMode = false;
-
-function updateCreationMode() {
+   {
   const song = creationWorkflow === 'song';
 
   $('createSongMode').className = song ? 'green' : 'secondary';
