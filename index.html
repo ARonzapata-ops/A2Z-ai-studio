@@ -34,6 +34,23 @@ main{max-width:900px;margin:auto;padding:0 14px 40px}.tabs{display:flex;gap:8px;
 
   <section id="tab-create">
     <div class="panel">
+      <div class="panel" id="creation-mode-panel">
+  <h2>What do you want to create?</h2>
+
+  <div class="actions">
+    <button type="button" id="createSongMode" class="green">Create a Song</button>
+    <button type="button" id="useMelodyMode" class="secondary">Use My Melody</button>
+  </div>
+
+  <h3>Workspace</h3>
+
+  <div class="actions">
+    <button type="button" id="simpleMode" class="green">Simple Mode</button>
+    <button type="button" id="studioMode" class="secondary">Studio Mode</button>
+  </div>
+
+  <p id="creationModeStatus" class="status">Simple Mode selected.</p>
+</div>
       <div class="section-title"><h2>Song workspace</h2><span class="pill">Saved on this device</span></div>
       <label for="projectName">Project name</label>
       <input id="projectName" maxlength="100" placeholder="e.g. The Clue Was Given">
