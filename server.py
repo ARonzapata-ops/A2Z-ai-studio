@@ -231,3 +231,165 @@ async def generate(
         raise HTTPException(status_code=502, detail=f"Generation failed: {str(exc)[:700]}") from exc
 
 
+
+# A2Z Art: text-to-image and reference-guided editing.
+# Provider credentials are server-only. Existing singing routes above are unchanged.
+import asyncio
+import base64
+import binascii
+import hashlib
+import secrets
+from fastapi import Request
+from fastapi.responses import JSONResponse
+
+ART_MAX_FILE = 10 * 1024 * 1024
+ART_MAX_BODY = 32 * 1024 * 1024
+_art_lock = asyncio.Lock()
+
+
+def art_configuration():
+    return {
+        'key': os.getenv('A2Z_ART_API_KEY', '').strip(),
+        'owner': os.getenv('A2Z_ART_OWNER_KEY', '').strip(),
+        'model': os.getenv('A2Z_ART_MODEL', 'gpt-image-2.5-flare').strip(),
+    }
+
+
+@app.middleware('http')
+async def protect_art_requests(request: Request, call_next):
+    if request.url.path == '/api/art/images' and request.method == 'POST':
+        cfg = art_configuration()
+        if not cfg['owner'] or not cfg['key']:
+            return JSONResponse({'detail': 'Art generation is not connected. Set A2Z_ART_API_KEY and A2Z_ART_OWNER_KEY on the server.'}, status_code=503, headers={'Access-Control-Allow-Origin': '*'})
+        supplied = request.headers.get('x-a2z-art-key', '')
+        if not supplied or not secrets.compare_digest(supplied, cfg['owner']):
+            return JSONResponse({'detail': 'The art access key is missing or incorrect.'}, status_code=401, headers={'Access-Control-Allow-Origin': '*'})
+        length = request.headers.get('content-length')
+        if length:
+            try:
+                if int(length) > ART_MAX_BODY:
+                    return JSONResponse({'detail': 'Upload at most three images, 10 MB each.'}, status_code=413, headers={'Access-Control-Allow-Origin': '*'})
+            except ValueError:
+                return JSONResponse({'detail': 'Invalid request size.'}, status_code=400, headers={'Access-Control-Allow-Origin': '*'})
+    return await call_next(request)
+
+
+@app.get('/api/art/capabilities')
+def art_capabilities():
+    cfg = art_configuration()
+    return {
+        'version': '1.7',
+        'image_generation': bool(cfg['key'] and cfg['owner']),
+        'reference_editing': bool(cfg['key'] and cfg['owner']),
+        'access_key_required': True,
+        'max_reference_images': 3,
+        'max_reference_bytes': ART_MAX_FILE,
+        'model': cfg['model'],
+        'video_generation': False,
+    }
+
+
+def image_mime(data: bytes):
+    if data.startswith(b'\x89PNG\r\n\x1a\n'):
+        return 'image/png'
+    if data.startswith(b'\xff\xd8\xff'):
+        return 'image/jpeg'
+    if data.startswith(b'RIFF') and data[8:12] == b'WEBP':
+        return 'image/webp'
+    return None
+
+
+async def art_provider_request(prompt, size, quality, references, cfg):
+    import httpx
+    common = {'model': cfg['model'], 'prompt': prompt, 'size': size,
+              'quality': quality, 'n': 1, 'output_format': 'png',
+              'safety_identifier': hashlib.sha256(cfg['owner'].encode()).hexdigest()}
+    headers = {'Authorization': 'Bearer ' + cfg['key']}
+    async with httpx.AsyncClient(timeout=240, follow_redirects=False) as client:
+        if references:
+            form = {k: str(v) for k, v in common.items()}
+            files = [('image[]', (f'reference-{i+1}.{mime.split("/")[1]}', data, mime))
+                     for i, (data, mime) in enumerate(references)]
+            result = await client.post('https://api.openai.com/v1/images/edits', headers=headers, data=form, files=files)
+        else:
+            result = await client.post('https://api.openai.com/v1/images/generations', headers=headers, json=common)
+        if result.status_code >= 400:
+            if result.status_code in (401, 403):
+                raise HTTPException(502, 'The image provider rejected the server credentials or model access. Check the server setup.')
+            if result.status_code == 429:
+                raise HTTPException(429, 'The image provider is at its quota or rate limit. No automatic retry was made.')
+            try:
+                message = str(result.json().get('error', {}).get('message', 'Image provider rejected the request.'))
+            except (ValueError, AttributeError):
+                message = 'Image provider rejected the request.'
+            raise HTTPException(502, message.replace(cfg['key'], '[redacted]')[:300])
+        try:
+            encoded = result.json()['data'][0]['b64_json']
+            if not isinstance(encoded, str) or len(encoded) > 50_000_000:
+                raise ValueError('Invalid image payload')
+            data = base64.b64decode(encoded, validate=True)
+            if image_mime(data) != 'image/png':
+                raise ValueError('Not a PNG result')
+            return data
+        except (ValueError, TypeError, KeyError, IndexError, binascii.Error):
+            raise HTTPException(502, 'The image provider returned no usable PNG image.')
+
+
+@app.post('/api/art/images')
+async def generate_art(
+    prompt: str = Form(..., min_length=1, max_length=20000),
+    size: str = Form('1024x1024'),
+    quality: str = Form('high'),
+    references: list[UploadFile] | None = File(None),
+):
+    if not prompt.strip():
+        raise HTTPException(422, 'Describe the artwork first.')
+    if size not in {'1024x1024', '1024x1536', '1536x1024'} or quality not in {'medium', 'high'}:
+        raise HTTPException(422, 'Unsupported size or quality.')
+    if len(references or []) > 3:
+        raise HTTPException(422, 'Choose no more than three reference images.')
+    images = []
+    for upload in references or []:
+        data = await upload.read(ART_MAX_FILE + 1)
+        if not data or len(data) > ART_MAX_FILE:
+            raise HTTPException(413, 'Each reference must be a nonempty image, 10 MB or smaller.')
+        mime = image_mime(data)
+        if mime is None:
+            raise HTTPException(415, 'Reference images must be PNG, JPEG, or WebP. Convert HEIC photos before uploading.')
+        images.append((data, mime))
+    if _art_lock.locked():
+        raise HTTPException(429, 'An image is already generating. Wait for it to finish before starting another.')
+    async with _art_lock:
+        try:
+            data = await art_provider_request(prompt.strip(), size, quality, images, art_configuration())
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(502, 'The image service did not finish normally. Check its request history before retrying; the app did not automatically retry.')
+    return Response(data, media_type='image/png', headers={'Cache-Control': 'no-store', 'Content-Disposition': 'inline; filename="a2z-art.png"'})
+
+async def verify_art_model(cfg):
+    import httpx
+    from urllib.parse import quote
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
+            response = await client.get('https://api.openai.com/v1/models/' + quote(cfg['model'], safe=''),
+                                        headers={'Authorization': 'Bearer ' + cfg['key']})
+        if response.status_code != 200:
+            raise HTTPException(502, 'The server could not verify image-model access. Check its provider key, model name, and account access.')
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, 'The image provider could not be reached to check model access.')
+
+
+@app.get('/api/art/access')
+async def check_art_access(request: Request):
+    cfg = art_configuration()
+    if not cfg['key'] or not cfg['owner']:
+        raise HTTPException(503, 'Art generation is not configured on this server yet.')
+    supplied = request.headers.get('x-a2z-art-key', '')
+    if not supplied or not secrets.compare_digest(supplied, cfg['owner']):
+        raise HTTPException(401, 'The art access key is missing or incorrect.')
+    await verify_art_model(cfg)
+    return {'connected': True, 'model': cfg['model'], 'message': 'Server access and image-model access checked. No image was generated.'}
