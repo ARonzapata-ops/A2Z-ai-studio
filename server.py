@@ -278,7 +278,7 @@ async def protect_art_requests(request: Request, call_next):
 def art_capabilities():
     cfg = art_configuration()
     return {
-        'version': '1.7',
+        'version': '1.7.1',
         'image_generation': bool(cfg['key'] and cfg['owner']),
         'reference_editing': bool(cfg['key'] and cfg['owner']),
         'access_key_required': True,
@@ -376,7 +376,23 @@ async def verify_art_model(cfg):
             response = await client.get('https://api.openai.com/v1/models/' + quote(cfg['model'], safe=''),
                                         headers={'Authorization': 'Bearer ' + cfg['key']})
         if response.status_code != 200:
-            raise HTTPException(502, 'The server could not verify image-model access. Check its provider key, model name, and account access.')
+            try:
+                error = response.json().get('error', {})
+                code = error.get('code') if isinstance(error, dict) else None
+            except (ValueError, AttributeError):
+                code = None
+            reasons = {
+                'invalid_api_key': 'The provider API key is invalid. Replace A2Z_ART_API_KEY on the server.',
+                'insufficient_quota': 'The provider account has no available quota. Check API billing and project limits.',
+                'model_not_found': 'The configured image model is unavailable to this provider account.',
+            }
+            reason = reasons.get(str(code), {
+                401: 'The provider rejected the server API key.',
+                403: 'The provider denied model access. Check project permissions and account verification.',
+                404: 'The configured image model was not found or is unavailable to this account.',
+                429: 'The provider reported a quota or rate limit.',
+            }.get(response.status_code, 'The provider could not verify model access.'))
+            raise HTTPException(502, f'{reason} Provider HTTP {response.status_code}. No image was generated.')
     except HTTPException:
         raise
     except Exception:
