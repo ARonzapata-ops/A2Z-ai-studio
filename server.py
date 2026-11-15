@@ -409,3 +409,7 @@ async def check_art_access(request: Request):
         raise HTTPException(401, 'The art access key is missing or incorrect.')
     await verify_art_model(cfg)
     return {'connected': True, 'model': cfg['model'], 'message': 'Server access and image-model access checked. No image was generated.'}
+
+# First self-hosted A2Z processing engine: owner-only queued photo/audio rendering.
+import workhorse
+workhorse.install(app)
