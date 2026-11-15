@@ -94,7 +94,7 @@ def command(arguments, directory):
 
 
 def lyric_cues(text, duration):
-    """Accept timestamped LRC or distribute plain lines evenly. Never infer words."""
+    """Require actual lyric timestamps; never invent timing from line count."""
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     if len(lines) > 200 or any(len(line) > 240 for line in lines):
         raise ValueError('Use at most 200 lyric lines, 240 characters per line.')
@@ -111,8 +111,10 @@ def lyric_cues(text, duration):
             starts.append((int(minutes) * 60 + float(seconds), content))
         if any(t >= duration for t, _ in starts) or any(a[0] >= b[0] for a, b in zip(starts, starts[1:])):
             raise ValueError('Lyric timestamps must increase and fall within the video length.')
+    elif lines:
+        raise ValueError('Sync lyrics to your soundtrack first, or use timestamped lyrics. Plain text has no song timing.')
     else:
-        starts = [(i * duration / len(lines), line) for i, line in enumerate(lines)]
+        return []
     return [(time, starts[i+1][0] if i+1 < len(starts) else duration, line) for i, (time, line) in enumerate(starts)]
 
 
@@ -267,8 +269,8 @@ def page():
 @router.get('/api/workhorse/capabilities')
 def capabilities():
     return {'renderer_available': bool(ffmpeg()), 'owner_key_configured': bool(os.getenv('A2Z_ART_OWNER_KEY', '').strip()),
-            'ai_video_generation': False, 'version': '2.0', 'max_duration_seconds': MAX_DURATION, 'max_photos': MAX_PHOTOS,
-            'camera_motion': ['none', 'zoom', 'pan'], 'fade_transitions': True, 'lyric_captions': True,
+            'ai_video_generation': False, 'version': '2.1', 'max_duration_seconds': MAX_DURATION, 'max_photos': MAX_PHOTOS,
+            'camera_motion': ['none', 'zoom', 'pan'], 'fade_transitions': True, 'lyric_captions': True, 'lyric_timestamps_required': True,
             'retention_hours': 24, 'storage': 'server-local; survives restarts only with a persistent disk'}
 
 
