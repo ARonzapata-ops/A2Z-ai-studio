@@ -267,6 +267,11 @@ async def lifespan(app):
         stop()
 
 
+@router.get('/free')
+def free_page():
+    return FileResponse(Path(__file__).with_name('free-studio.html'), headers={'Cache-Control': 'no-store'})
+
+
 @router.get('/workhorse')
 def page():
     return FileResponse(Path(__file__).with_name('workhorse.html'), headers={'Cache-Control': 'no-store'})
@@ -376,4 +381,5 @@ def install(app):
             except HTTPException as exc:
                 return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
         return await call_next(request)
+
 
