@@ -170,6 +170,9 @@ def scene_filter(width, height, frames, index, motion, fades):
 def render(identifier):
     directory = ROOT / identifier
     spec = json.loads((directory / 'input.json').read_text())
+    if spec.get('kind') == 'ai':
+        import director
+        return director.render(identifier, spec)
     count = spec['count']
     width, height = (720, 1280) if spec['format'] == 'vertical' else (1280, 720)
     cues = lyric_cues(spec.get('lyrics', ''), spec['duration'])
@@ -216,7 +219,7 @@ def worker():
             return
         # The process lock guarantees no other renderer owns these jobs.
         with database() as db:
-            db.execute("UPDATE jobs SET state='failed', detail='Server restarted during rendering. Submit again.' WHERE state='running'")
+            db.execute("UPDATE jobs SET state='failed', detail='Server restarted during rendering. Submit again.' WHERE state IN ('running','uploading')")
         while not _stop.is_set():
             with database() as db:
                 expired = db.execute('SELECT id FROM jobs WHERE created < ? AND state != ?', (time.time() - TTL, 'running')).fetchall()
@@ -232,7 +235,10 @@ def worker():
                 except Exception as exc:
                     log.warning('Video job %s failed: %s', identifier, type(exc).__name__)
                     update(identifier, 'failed', 0, str(exc) if isinstance(exc, (RuntimeError, InterruptedError)) else 'Video processing failed. Submit again with standard media files.')
-                    shutil.rmtree(ROOT / identifier, ignore_errors=True)
+                    # Preserve provider task IDs after failures; never silently regenerate footage.
+                    spec_path = ROOT / identifier / 'input.json'
+                    if not spec_path.exists() or json.loads(spec_path.read_text()).get('kind') != 'ai':
+                        shutil.rmtree(ROOT / identifier, ignore_errors=True)
             else:
                 _stop.wait(1)
 
@@ -347,12 +353,15 @@ def download(identifier: str):
 
 
 def install(app):
+    import director
+    import sys
+    director.install(app, sys.modules[__name__])
     app.include_router(router)
     app.router.lifespan_context = lifespan
 
     @app.middleware('http')
     async def protect_upload(request, call_next):
-        if request.url.path == '/api/workhorse/jobs' and request.method == 'POST':
+        if request.method == 'POST' and (request.url.path == '/api/workhorse/jobs' or request.url.path.startswith('/api/director/')):
             try:
                 owner(request)
                 length = request.headers.get('content-length')
@@ -367,3 +376,4 @@ def install(app):
             except HTTPException as exc:
                 return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
         return await call_next(request)
+
