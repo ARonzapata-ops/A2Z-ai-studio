@@ -4,6 +4,7 @@ import fcntl
 import json
 import logging
 import os
+import re
 from pathlib import Path
 import secrets
 import shutil
@@ -24,6 +25,8 @@ _stop = threading.Event()
 _thread = None
 log = logging.getLogger(__name__)
 MAX_PENDING = 3
+MAX_DURATION = 900
+MAX_PHOTOS = 30
 TTL = 86400
 
 
@@ -90,26 +93,113 @@ def command(arguments, directory):
                     process.wait()
 
 
+def lyric_cues(text, duration):
+    """Accept timestamped LRC or distribute plain lines evenly. Never infer words."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if len(lines) > 200 or any(len(line) > 240 for line in lines):
+        raise ValueError('Use at most 200 lyric lines, 240 characters per line.')
+    pattern = re.compile(r'^\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]\s*(.*)$')
+    matches = [pattern.fullmatch(line) for line in lines]
+    if any(matches):
+        if not all(matches):
+            raise ValueError('Use timestamps on every lyric line, or leave all lines untimed.')
+        starts = []
+        for match in matches:
+            minutes, seconds, content = match.groups()
+            if float(seconds) >= 60:
+                raise ValueError('Lyric timestamp seconds must be below 60.')
+            starts.append((int(minutes) * 60 + float(seconds), content))
+        if any(t >= duration for t, _ in starts) or any(a[0] >= b[0] for a, b in zip(starts, starts[1:])):
+            raise ValueError('Lyric timestamps must increase and fall within the video length.')
+    else:
+        starts = [(i * duration / len(lines), line) for i, line in enumerate(lines)]
+    return [(time, starts[i+1][0] if i+1 < len(starts) else duration, line) for i, (time, line) in enumerate(starts)]
+
+
+def ass_time(seconds):
+    value = round(max(0, seconds) * 100)
+    return f'{value // 360000}:{value // 6000 % 60:02}:{value // 100 % 60:02}.{value % 100:02}'
+
+
+def caption_file(path, cues, offset, seconds, width, height):
+    # Text cannot introduce ASS styling, drawings, extra events or line breaks.
+    header = f"""[Script Info]
+ScriptType: v4.00+
+PlayResX: {width}
+PlayResY: {height}
+WrapStyle: 0
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Lyrics,DejaVu Sans,{36 if height > width else 32},&H00FFFFFF,&H00FFFFFF,&H00101010,&H80000000,-1,0,0,0,100,100,0,0,1,2,1,2,55,55,{int(height * .13)},1
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    events = []
+    for start, end, text in cues:
+        a, b = max(0, start-offset), min(seconds, end-offset)
+        if b <= a:
+            continue
+        safe = text.replace('\\', '／').replace('{', '｛').replace('}', '｝')
+        safe = ''.join(c for c in safe if ord(c) >= 32)
+        events.append(f'Dialogue: 0,{ass_time(a)},{ass_time(b)},Lyrics,,0,0,0,,{safe}\n')
+    path.write_text(header + ''.join(events), encoding='utf-8')
+
+
+def scene_filter(width, height, frames, index, motion, fades):
+    seconds = frames / 24
+    filters = [f'scale={width}:{height}:force_original_aspect_ratio=decrease',
+               f'pad={width}:{height}:(ow-iw)/2:(oh-ih)/2', 'setsar=1']
+    if motion != 'none':
+        denominator = max(1, frames-1)
+        zoom = f'1.12-0.10*on/{denominator}' if index % 2 else f'1.02+0.10*on/{denominator}'
+        x = 'iw/2-iw/zoom/2'
+        y = 'ih/2-ih/zoom/2'
+        if motion == 'pan':
+            zoom = '1.12'
+            x = f'(iw-iw/zoom)*on/{denominator}' if index % 2 else f'(iw-iw/zoom)*(1-on/{denominator})'
+        filters.append(f"zoompan=z='{zoom}':x='{x}':y='{y}':d={frames}:s={width}x{height}:fps=24")
+    if fades:
+        fade = min(.4, seconds/4)
+        filters += [f'fade=t=in:st=0:d={fade}', f'fade=t=out:st={seconds-fade}:d={fade}']
+    filters.append('format=yuv420p')
+    return ','.join(filters)
+
+
 def render(identifier):
     directory = ROOT / identifier
     spec = json.loads((directory / 'input.json').read_text())
     count = spec['count']
-    seconds = spec['duration'] / count
     width, height = (720, 1280) if spec['format'] == 'vertical' else (1280, 720)
+    cues = lyric_cues(spec.get('lyrics', ''), spec['duration'])
+    frames_total = spec['duration'] * 24
+    offset = 0
     for i in range(count):
-        command(['-threads', '1', '-loop', '1', '-framerate', '24', '-i', str(directory / f'photo-{i}.jpg'),
-                 '-t', str(seconds), '-vf', f'scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p',
-                 '-filter_threads', '1', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-threads', '1', str(directory / f'scene-{i}.mp4')], directory)
+        frames = frames_total // count + (1 if i < frames_total % count else 0)
+        seconds = frames / 24
+        motion = spec.get('motion', 'none')
+        filters = scene_filter(width, height, frames, i, motion, spec.get('fades', False))
+        if cues:
+            captions = directory / f'lyrics-{i}.ass'
+            caption_file(captions, cues, offset, seconds, width, height)
+            filters += f",subtitles=filename='{captions}'"
+        loop = ['-loop', '1', '-framerate', '24'] if motion == 'none' else []
+        command(['-threads', '1', *loop, '-i', str(directory / f'photo-{i}.jpg'),
+                 '-frames:v', str(frames), '-vf', filters,
+                 '-filter_threads', '1', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-threads', '1', str(directory / f'scene-{i}.mp4')], directory)
+        offset += seconds
         update(identifier, 'running', int((i + 1) / count * 85))
     playlist = directory / 'scenes.txt'
     playlist.write_text(''.join(f"file 'scene-{i}.mp4'\n" for i in range(count)))
+    audio_filter = 'apad'
+    if spec.get('fades', False):
+        audio_filter += f",afade=t=in:st=0:d=0.3,afade=t=out:st={spec['duration']-.6}:d=0.6"
+    update(identifier, 'running', 90, 'Adding your soundtrack and finishing the download…')
     command(['-f', 'concat', '-safe', '1', '-i', str(playlist), '-protocol_whitelist', 'file,pipe', '-format_whitelist', 'wav,mp3,mov,ogg,flac,aac,matroska,webm', '-i', str(directory / 'audio'),
              '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
-             '-af', 'apad', '-t', str(spec['duration']), '-movflags', '+faststart', '-threads', '1', str(directory / 'video.mp4')], directory)
+             '-af', audio_filter, '-t', str(spec['duration']), '-movflags', '+faststart', '-threads', '1', str(directory / 'video.mp4')], directory)
     if not (directory / 'video.mp4').stat().st_size:
         raise RuntimeError('The renderer returned an empty video.')
     update(identifier, 'complete', 100)
-    # Retain only the deliverable, not original private uploads.
     for path in directory.iterdir():
         if path.name != 'video.mp4':
             path.unlink(missing_ok=True)
@@ -177,16 +267,24 @@ def page():
 @router.get('/api/workhorse/capabilities')
 def capabilities():
     return {'renderer_available': bool(ffmpeg()), 'owner_key_configured': bool(os.getenv('A2Z_ART_OWNER_KEY', '').strip()),
-            'ai_video_generation': False, 'max_duration_seconds': 300, 'max_photos': 10,
+            'ai_video_generation': False, 'version': '2.0', 'max_duration_seconds': MAX_DURATION, 'max_photos': MAX_PHOTOS,
+            'camera_motion': ['none', 'zoom', 'pan'], 'fade_transitions': True, 'lyric_captions': True,
             'retention_hours': 24, 'storage': 'server-local; survives restarts only with a persistent disk'}
 
 
 @router.post('/api/workhorse/jobs', dependencies=[Depends(owner)], status_code=202)
-async def submit(photos: list[UploadFile] = File(...), audio: UploadFile = File(...), duration: int = Form(60), format: str = Form('vertical')):
+async def submit(photos: list[UploadFile] = File(...), audio: UploadFile = File(...), duration: int = Form(60), format: str = Form('vertical'),
+                 motion: str = Form('zoom'), fades: bool = Form(True), lyrics: str = Form('', max_length=20000)):
     if not ffmpeg():
         raise HTTPException(503, 'FFmpeg is not installed on this server.')
-    if not 1 <= len(photos) <= 10 or not 5 <= duration <= 300 or format not in {'vertical', 'landscape'}:
-        raise HTTPException(422, 'Use 1–10 photos, 5–300 seconds, and vertical or landscape format.')
+    if not 1 <= len(photos) <= MAX_PHOTOS or not 5 <= duration <= MAX_DURATION or format not in {'vertical', 'landscape'}:
+        raise HTTPException(422, 'Use 1–30 photos, 5–900 seconds, and vertical or landscape format.')
+    if motion not in {'none', 'zoom', 'pan'}:
+        raise HTTPException(422, 'Choose still, zoom or pan camera movement.')
+    try:
+        lyric_cues(lyrics, duration)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc))
     identifier = str(uuid.uuid4())
     directory = Path(tempfile.mkdtemp(prefix='upload-', dir=ROOT))
     try:
@@ -216,7 +314,7 @@ async def submit(photos: list[UploadFile] = File(...), audio: UploadFile = File(
                 target.write(chunk)
         if not total:
             raise HTTPException(422, 'Choose a nonempty audio file.')
-        (directory / 'input.json').write_text(json.dumps({'count': len(photos), 'duration': duration, 'format': format}))
+        (directory / 'input.json').write_text(json.dumps({'count': len(photos), 'duration': duration, 'format': format, 'motion': motion, 'fades': fades, 'lyrics': lyrics}))
         with database() as db:
             db.execute('BEGIN IMMEDIATE')
             if db.execute("SELECT COUNT(*) FROM jobs WHERE state IN ('queued','running')").fetchone()[0] >= MAX_PENDING:
@@ -262,8 +360,8 @@ def install(app):
                     size = int(length)
                 except ValueError:
                     raise HTTPException(400, 'Invalid upload size.')
-                if not 0 < size <= 102 * 1024 * 1024:
-                    raise HTTPException(413, 'The combined upload must be 102 MB or smaller.')
+                if not 0 < size <= 202 * 1024 * 1024:
+                    raise HTTPException(413, 'The combined upload must be 202 MB or smaller.')
             except HTTPException as exc:
                 return JSONResponse({'detail': exc.detail}, status_code=exc.status_code)
         return await call_next(request)
