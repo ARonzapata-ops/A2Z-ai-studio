@@ -10,3 +10,5 @@ for(const b of document.querySelectorAll('[data-nav]'))b.onclick=()=>window.A2ZN
 })();
 
 (()=>{if(new URLSearchParams(location.search).get("kids")==="1")return;const a=document.createElement("a");a.href="./release-studio.html";a.textContent="Finish a song · Release room →";a.style.cssText="display:block;margin:16px;padding:20px;border-radius:16px;background:linear-gradient(115deg,#275c58,#493573);color:white;font-weight:800;text-decoration:none";document.getElementById("homeView")?.prepend(a)})();
+
+(()=>{if(new URLSearchParams(location.search).get("kids")==="1")return;const a=document.createElement("a");a.href="./free-lab.html";a.textContent="Free creative lab · local AI & cover designer →";a.className="project-card";a.style.cssText="display:block;margin:16px;padding:20px;border-radius:16px;background:#a8f0d8;color:#102d2a;font-weight:800;text-decoration:none";document.getElementById("homeView")?.prepend(a)})();

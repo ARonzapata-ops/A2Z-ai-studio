@@ -1,0 +1,9 @@
+{
+  "name": "a2z-free-creative",
+  "main": "free-cloud-worker.mjs",
+  "compatibility_date": "2026-11-16",
+  "ai": {"binding": "AI"},
+  "d1_databases": [{"binding":"DB", "database_name":"a2z-free-records", "database_id":"REPLACE_WITH_YOUR_CREATED_D1_DATABASE_ID"}],
+  "vars": {"FREE_PLAN_CONFIRMED":"false", "ALLOWED_ORIGIN":"https://aronzapata-ops.github.io"},
+  "triggers": {"crons":["20 3 * * *"]}
+}

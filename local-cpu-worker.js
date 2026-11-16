@@ -1,0 +1,5 @@
+import {pipeline,env,TextStreamer} from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1';
+env.allowLocalModels=false;
+env.backends.onnx.wasm.numThreads=1;
+let generator=null;
+self.onmessage=async event=>{const {id,action,messages}=event.data;try{if(action==='load'){generator=await pipeline('text-generation','onnx-community/SmolLM2-135M-Instruct-ONNX',{device:'wasm',dtype:'q4',progress_callback:p=>{if(p.status==='progress')self.postMessage({id,type:'progress',text:'Downloading '+p.file+' · '+Math.round(p.progress||0)+'%',progress:(p.progress||0)/100})}});self.postMessage({id,type:'done'});}else if(action==='generate'){if(!generator)throw Error('Load the local model first.');let text='';const streamer=new TextStreamer(generator.tokenizer,{skip_prompt:true,skip_special_tokens:true,callback_function:chunk=>{text+=chunk;self.postMessage({id,type:'chunk',text:chunk})}});await generator(messages,{max_new_tokens:128,do_sample:false,repetition_penalty:1.15,streamer});self.postMessage({id,type:'done',text});}}catch(e){self.postMessage({id,type:'error',text:String(e.message||e).slice(0,250)})}};

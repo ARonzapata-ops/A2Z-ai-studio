@@ -32,4 +32,4 @@ The release room holds one current release on each browser. Download a backup be
 
 ## Validation
 
-`python -m unittest discover -s tests -v` checks authentication, disabled storage, per-user allowances, uncertain submission reservation, idempotency, nonce conflicts, quote changes, job isolation and queued fal output recovery with mocked provider responses. These tests incur no paid generation. JS syntax and Python compile checks cover the new source. Real provider calls and physical iPhone recording require separate verification.
+`python -m unittest test_ai_gateway -v` checks authentication, disabled storage, per-user allowances, uncertain submission reservation, idempotency, nonce conflicts, quote changes, job isolation and queued fal output recovery with mocked provider responses. These tests incur no paid generation. JS syntax and Python compile checks cover the new source. Real provider calls and physical iPhone recording require separate verification.
