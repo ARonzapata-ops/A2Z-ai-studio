@@ -423,3 +423,7 @@ async def check_art_access(request: Request):
 # First self-hosted A2Z processing engine: owner-only queued photo/audio rendering.
 import workhorse
 workhorse.install(app)
+
+# Optional, independently configured paid provider gateway.
+from ai_gateway import router as ai_router
+app.include_router(ai_router)
