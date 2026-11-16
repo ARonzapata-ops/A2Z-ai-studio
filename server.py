@@ -18,7 +18,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
-from gradio_client import Client
+from gradio_client import Client, handle_file
 
 APP_TITLE = "A2Z Voice AI Studio"
 SOULX_SPACE = os.getenv("SOULX_SPACE", "Soul-AILab/SoulX-Singer").strip()
@@ -89,44 +89,48 @@ def _file_path(value: Any, label: str) -> str:
     return str(path)
 
 
+VOICE_PARAMETERS = (
+    'prompt_audio', 'target_audio', 'prompt_metadata', 'target_metadata',
+    'control', 'auto_shift', 'pitch_shift', 'seed', 'prompt_lyric_lang',
+    'target_lyric_lang', 'prompt_vocal_sep', 'target_vocal_sep',
+)
+
+
+def voice_endpoint(client):
+    """Verify the provider's current, public API contract before sending audio."""
+    schema = client.view_api(print_info=False, return_format="dict") or {}
+    named = schema.get('named_endpoints', {})
+    for name, endpoint in named.items():
+        parameters = tuple(p.get('parameter_name') for p in endpoint.get('parameters', []))
+        if parameters == VOICE_PARAMETERS:
+            return name
+    raise RuntimeError('The singing service API has changed. No audio was sent. The A2Z adapter needs an update.')
+
+
 def _call_soulx(prompt_path: str, target_path: str) -> Any:
-    """Run the same three-stage flow as the official Space's UI callbacks."""
-    client = get_client()
-
-    # The official UI runs these callbacks when audio is uploaded. Their output
-    # metadata is then passed into _run_synthesis. Names are discovered from the
-    # Space's own API schema rather than assuming a made-up synthesis endpoint.
-    prompt_result = client.predict(
-        prompt_path,
-        None,       # prompt metadata: generate it from the uploaded voice sample
-        "English", # prompt lyric language
-        "no",      # do not separate vocals from the reference voice by default
-        api_name=_endpoint(client, "transcribe_prompt", ("/_transcribe_prompt", "/transcribe_prompt")),
+    # Use an isolated session for each job. The current Space exposes one combined
+    # synthesis_function endpoint, with transcription performed by the provider.
+    client = Client(SOULX_SPACE, verbose=False)
+    endpoint = voice_endpoint(client)
+    return client.predict(
+        handle_file(prompt_path), handle_file(target_path), None, None,
+        'melody', True, 0, 12306, 'English', 'English', False, True,
+        api_name=endpoint,
     )
-    prompt_metadata = _file_path(_first_output(prompt_result, "reference-voice metadata"), "reference-voice metadata")
 
-    target_result = client.predict(
-        target_path,
-        None,       # target metadata: generate it from the guide audio
-        "English", # target lyric language
-        "yes",     # guide may contain accompaniment; enable vocal separation
-        api_name=_endpoint(client, "transcribe_target", ("/_transcribe_target", "/transcribe_target")),
-    )
-    target_metadata = _file_path(_first_output(target_result, "target metadata"), "target metadata")
 
-    # This is the actual synthesis callback and its actual input signature.
-    # The official UI uses melody-controlled or score-controlled.
-    result = client.predict(
-        prompt_path,
-        prompt_metadata,
-        target_metadata,
-        "melody-controlled",
-        "yes",   # automatic pitch shift
-        0,       # pitch shift in semitones
-        12306,   # reproducible default seed
-        api_name=_endpoint(client, "run_synthesis", ("/_run_synthesis", "/run_synthesis")),
-    )
-    return result
+@app.get('/api/voice/capabilities')
+async def voice_capabilities():
+    try:
+        endpoint = await run_in_threadpool(lambda: voice_endpoint(get_client()))
+        return {'reachable': True, 'api_compatible': True, 'endpoint': endpoint,
+                'requires_voice_sample': True, 'requires_audio_guide': True,
+                'generation_tested': False,
+                'message': 'Live singing API checked. Generation still depends on the provider queue and uploaded audio.'}
+    except Exception:
+        return JSONResponse({'reachable': False, 'api_compatible': False,
+                             'generation_tested': False,
+                             'message': 'The singing service could not be verified. Your drafts are safe; try the connection check later.'}, status_code=503)
 
 
 @app.get("/")
@@ -136,7 +140,7 @@ def home():
         "app": APP_TITLE,
         "singing_model": SOULX_SPACE,
         "generation_route": "/generate",
-        "generation_flow": "reference transcription -> guide transcription -> synthesis",
+        "generation_flow": "combined guide transcription and synthesis",
     }
 
 
@@ -171,8 +175,11 @@ async def generate(
             ),
         )
 
-    prompt_bytes = await voice_sample.read()
-    target_bytes = await reference_audio.read()
+    max_upload = 25 * 1024 * 1024
+    prompt_bytes = await voice_sample.read(max_upload + 1)
+    target_bytes = await reference_audio.read(max_upload + 1)
+    if len(prompt_bytes) > max_upload or len(target_bytes) > max_upload:
+        raise HTTPException(status_code=413, detail="Each voice recording must be 25 MB or smaller.")
     if not prompt_bytes:
         raise HTTPException(status_code=400, detail="The reference voice sample is empty.")
     if not target_bytes:
@@ -278,10 +285,13 @@ async def protect_art_requests(request: Request, call_next):
 def art_capabilities():
     cfg = art_configuration()
     return {
-        'version': '1.7.1',
+        'version': '1.7.2',
         'image_generation': bool(cfg['key'] and cfg['owner']),
         'reference_editing': bool(cfg['key'] and cfg['owner']),
         'access_key_required': True,
+        'provider_access_verified': False,
+        'generation_tested': False,
+        'message': 'Server configuration only. Use the authenticated access check to verify provider access.',
         'max_reference_images': 3,
         'max_reference_bytes': ART_MAX_FILE,
         'model': cfg['model'],
