@@ -1,6 +1,6 @@
 /* A2Z local audio processing. Original buffers are never modified. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.A2ZAudio=api})(typeof window!=='undefined'?window:globalThis,function(){
-'use strict';const MAX_SECONDS=300,MAX_CLIPS=32,MAX_SOURCES=4;
+'use strict';const MAX_SECONDS=300,MAX_CLIPS=32,MAX_SOURCES=12;
 const presets={natural:{highpass:20,bass:0,treble:0,compress:false,wet:0},clear:{highpass:90,bass:-2,treble:3,compress:true,wet:0},warm:{highpass:40,bass:3,treble:-2,compress:true,wet:.06},telephone:{highpass:300,bass:-4,treble:0,compress:true,wet:0,lowpass:3400}};
 const db=v=>Math.pow(10,v/20),duration=c=>(c.out-c.in)/c.rate,clipEnd=c=>c.at+duration(c);
 const fresh=()=>({version:1,title:'My new mix',clips:[],masterDb:0,normalize:false,preventClipping:true});
