@@ -1,4 +1,4 @@
-const CACHE='a2z-creative-studio-v6';
+const CACHE='a2z-creative-studio-v7';
 const CORE=['./','./index.html','./manifest.webmanifest'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>/^a2z-(voice-ai|creative)-studio-/.test(key)&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
